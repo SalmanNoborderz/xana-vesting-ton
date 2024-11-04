@@ -1,4 +1,4 @@
-# simple-counter
+# XANA-TON-VESTING
 
 ## Project structure
 
