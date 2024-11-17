@@ -6,10 +6,12 @@ import '@ton/test-utils';
 import { buildOnchainMetadata } from '../contracts/utils/jetton-helpers';
 import { JettonDefaultWallet } from '../build/SampleJetton/tact_JettonDefaultWallet';
 import { sleep } from '@ton/blueprint';
+import { VestingV2 } from '../wrappers/VestingV2';
 
 describe('VestingV1', () => {
     let blockchain: Blockchain;
     let vestingV1: SandboxContract<VestingV1>;
+    let vestingV2: SandboxContract<VestingV2>;
     let xanaToken: SandboxContract<SampleJetton>;
     let deployer: SandboxContract<TreasuryContract>;
     let vestingJettonWallet: SandboxContract<JettonDefaultWallet>;
@@ -65,6 +67,21 @@ describe('VestingV1', () => {
 
         const vJettonWallet = await xanaToken.getGetWalletAddress(vestingV1.address);
         vestingJettonWallet = blockchain.openContract(await JettonDefaultWallet.fromAddress(vJettonWallet));
+
+        vestingV2 = blockchain.openContract(await VestingV2.fromInit(
+            xanaToken.address,
+            vestingV1.address,
+            maxSupply,
+            1000n,
+            [1000n, 1000n, 1000n, 1000n, 1000n] as any,
+            [1000n, 1000n, 1000n, 1000n, 1000n] as any,
+        ));
+
+        const vestingV2DeployResult = await vestingV2.send(
+            deployer.getSender(),
+            { value: toNano('0.05') },
+            { $$type: 'Deploy', queryId: 0n }
+        );
     });
 
     it('should deploy', async () => {
@@ -317,8 +334,7 @@ describe('VestingV1', () => {
             success: true,
         });
 
-        const storedGlobals = await vestingV1.getGlobals();
-        console.log(storedGlobals);
+        // const storedGlobals = await vestingV1.getGlobals();
         // expect(storedGlobals.time).toEqual(newGlobals.time);
         // expect(storedGlobals.limit).toEqual(newGlobals.limit);
         // expect(storedGlobals.emission).toEqual(newGlobals.emission);
@@ -339,6 +355,27 @@ describe('VestingV1', () => {
             to: vestingV1.address,
             success: false,
         });
+    });
+
+    it('should set emission on v2', async () => {
+        console.log("V2 emissions Before:", await vestingV2.getTotalEmissions());
+
+        const emission = 2n;
+        const result = await vestingV1.send(
+            deployer.getSender(),
+            { value: toNano('0.1') },
+            { $$type: 'TestV2EmissionSet', emissions: emission, address: vestingV2.address }
+        );
+
+        console.log("V2 emissions after:", await vestingV2.getTotalEmissions());
+
+        // expect(result.transactions).toHaveTransaction({
+        //     from: deployer.address,
+        //     to: vestingV2.address,
+        //     success: true,
+        // });
+
+        // expect(await vestingV2.getTotalEmissions()).toEqual(emission);
     });
 
     // it('should correctly calculate next emission times', async () => {

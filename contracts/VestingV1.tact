@@ -50,6 +50,15 @@ message EmergencyWithdraw {
     amount: Int;
 }
 
+message SetTotalV1Emissions {
+    emissions: Int;
+}
+
+message TestV2EmissionSet {
+    emissions: Int;
+    address: Address;
+}
+
 struct ReleaseInfo {
     releaseTime: Int;
     releaseAmount: Int;
@@ -68,12 +77,6 @@ struct Category {
 
 struct User {
     id: Int;
-}
-
-struct EmissionTimes {
-    emissionStart: Int;
-    emissionEnd: Int;
-    emissionDays: Int;
 }
 
 // Category Numbering
@@ -231,12 +234,33 @@ contract VestingV1 with Deployable, OwnableTransferable {
             if (self.emission < self.limit.length) {
                 self.nextWithdrawtime = self.nextWithdrawtime + (self.limit.m.get(self.emission)!! * self.time);
             }
+
+            // Set the total V1 emissions on target V2 contract
+            send(SendParameters{
+                to: c.targetAddress,
+                value: 0,
+                bounce: false,
+                body: SetTotalV1Emissions{
+                    emissions: self.emission
+                }.toCell()
+            });
         }
     }
 
     receive(msg: EmergencyWithdraw) {
         self.requireOwner();
         self.transferJettons(msg.to, msg.amount, msg.to);
+    }
+
+    receive(msg: TestV2EmissionSet) {
+        send(SendParameters{
+            to: msg.address,
+            value: 0,
+            mode: SendRemainingValue + SendIgnoreErrors,
+            body: SetTotalV1Emissions{
+                emissions: msg.emissions
+            }.toCell()
+        });
     }
 
     get fun MaxSupply(category: Int): Int {
@@ -252,31 +276,6 @@ contract VestingV1 with Deployable, OwnableTransferable {
     get fun Percentage(category: Int, step: Int): Int {
         let c: Category = self.categories.get(category)!!;
         return c.releaseAmounts.m.get(step)!!;
-    }
-
-    get fun NextEmissionTimes(_emission: Int): EmissionTimes {
-        let emissionEnd: Int = 0;
-        let emissionDays: Int = 0;
-        let emissionStart: Int = self.firstRelease;
-
-        let i: Int = 0;
-        while (i <= _emission) {
-            if (i !=0) {emissionStart = emissionStart + (self.limit.m.get(i)!! * self.time)}
-
-            if (i == self.limit.length) {
-                emissionEnd = emissionStart + (self.limit.m.get(i)!! * self.time);
-            } else {
-                emissionEnd = emissionStart + (self.limit.m.get(i+1)!! * self.time);
-            }
-
-            i = i + 1;
-        }
-        emissionDays = (emissionEnd - emissionStart) / self.time;
-        return EmissionTimes{
-            emissionStart: emissionStart,
-            emissionEnd: emissionEnd,
-            emissionDays: emissionDays
-        };
     }
 
     get fun FirstRelease(): Int {
